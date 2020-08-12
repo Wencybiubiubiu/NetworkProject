@@ -1,0 +1,123 @@
+from socket import *
+import sys
+
+#get port number
+PORT = int(sys.argv[1])
+connect_number = 5
+
+#index to get information from received message
+CMD = 0
+FILENAME = 1
+HTTP_VERSION = 2
+
+#result to execute command
+FAILED = 0
+SUCCEEDED = 1
+
+def main():
+	print("=========open===========")
+
+	#set up server socket
+	serverSocket = socket(AF_INET, SOCK_STREAM) 
+	serverSocket.bind(('', PORT))
+	serverSocket.listen(connect_number) 
+
+	print("Server is ready, port: " + str(PORT))
+
+	while True:
+		connectionSocket, addr = serverSocket.accept()
+		formatted_message = get_message(connectionSocket)
+		command = formatted_message[CMD]
+		exe_result = exc_cmd(command,formatted_message,connectionSocket)
+		if(exe_result == FAILED):
+			not_found(connectionSocket)
+	serverSocket.close()
+
+	print("=========close==========")
+
+#after receiving request, set up new TCP connection
+def set_up_connection(serverSocket):
+	connectionSocket, addr = serverSocket.accept()
+	return connectionSocket, addr
+
+#get message after connection is built
+def get_message(connection_socket):
+	message = connection_socket.recv(1024)
+	print("Message content: " + message)
+	#transfer message to array format with arr split_message=[cmd,filename,http version]
+	split_message = message.split()
+	return split_message
+
+#get command and execute based on protocols
+def exc_cmd(cmd,formatted_message,connection_socket):
+	result = FAILED
+	if(cmd == 'GET'):
+		request_file = formatted_message[FILENAME]
+		split_request_file = request_file.split('.')
+		file_suffix = split_request_file[len(split_request_file)-1]
+
+		if(request_file == '/'):
+			request_file == '/index.html'
+
+
+		try:
+			if(file_suffix == 'txt'):
+				f = open(request_file[1:],'rb')
+
+				output = f.read()
+
+				#Send one HTTP header to socket
+				#ok_header = ' HTTP/1.1 200 OK\n'
+				#connection_socket.send(ok_header.encode())
+				
+				connection_socket.send(output.encode())
+				connection_socket.close()
+				
+				#return whether read is successful
+				result = SUCCEEDED
+				return result
+			elif(file_suffix == 'jpeg'):
+				#img = open(request_file[1:],'rb')
+				#print(request_file[1:],"=====")
+				#for i in range(1):
+				img = open(request_file[1:],'r')
+				while True:
+					strng = img.readline(512)
+					if not strng:
+						break
+					connection_socket.send(strng)
+				img.close()
+
+				exit()
+				connection_socket.close()
+
+				#return whether read is successful
+				result = SUCCEEDED
+				return result
+
+		except IOError:
+			connection_socket.close()
+			result = FAILED
+			return result
+		
+		#close the connection, and the while loop will open a new connection
+		connection_socket.close()
+
+		#return whether read is successful
+		result = SUCCEEDED
+		return result
+	else:
+		#if command is not recognized, return failed
+		connection_socket.close()
+		result = FAILED
+		return result
+
+def not_found(connection_socket):
+	#create header message to send
+	header = ' HTTP/1.1 404 Not Found'
+	connection_socket.send(header.encode())
+	#close socket
+	connection_socket.close()
+
+if __name__ == "__main__":
+	main()
